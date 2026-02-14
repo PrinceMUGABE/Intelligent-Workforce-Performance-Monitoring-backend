@@ -23,4 +23,6 @@ urlpatterns = [
     
     # Get departments created by logged-in user
     path('my-departments/', views.get_my_departments, name='get_my_departments'),
+    
+    path('<int:department_id>/employees/', views.get_department_employees, name='get_department_employees'),
 ]

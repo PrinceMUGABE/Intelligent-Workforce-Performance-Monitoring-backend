@@ -22,6 +22,38 @@ ALLOWED_HOSTS = [
 ]
 
 
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",  # Your Vite frontend
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",  # If you ever use React default
+    "http://127.0.0.1:3000",
+]
+
+CORS_ALLOW_CREDENTIALS = True  # This allows cookies/auth headers
+
+# Optional but recommended - add these for better security
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -36,12 +68,15 @@ INSTALLED_APPS = [
     'corsheaders',
     'channels',
     'userApp',
-    'onboarding',
-    'mentorshipApp',
     'departmentApp',
-    'chatApp',
+    'activityApp',
+    'taskApp',
     'notificationApp',
-    'assistanceApp',
+    'taskAssignmentApp',
+    'performanceApp',
+    'requestApp',
+    'analyticApp',
+    'dashboardApp',
     'reportApp',
     
 ]
@@ -87,7 +122,7 @@ ASGI_APPLICATION = 'backend.asgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'mysql.connector.django',
-        'NAME': 'teta_db',
+        'NAME': 'gatete_db',
         'USER': 'root',
         'PASSWORD': '07288',
         'HOST': 'localhost',
@@ -172,9 +207,6 @@ AUTHENTICATION_BACKENDS = [
 
 
 
-CORS_ALLOW_ALL_ORIGINS = True
-
-
 # settings.py
 
 # Add media configurations
@@ -188,7 +220,7 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = 'princemugabe567@gmail.com'
 EMAIL_HOST_PASSWORD = 'qdzu gzbd bnjl qamv'
-DEFAULT_FROM_EMAIL = 'Digital Mentorship  <princemugabe567@gmail.com>'
+DEFAULT_FROM_EMAIL = 'CodePulse Africa Ltd  <princemugabe567@gmail.com>'
 
 
 
@@ -272,8 +304,8 @@ REST_FRAMEWORK = {
         'rest_framework.throttling.UserRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '10000/day',
-        'user': '10000/day',
+        'anon': '1000000/day',
+        'user': '10000000/day',
         'assistance_anon': '500/hour',
         'assistance_user': '5000/hour',
     }

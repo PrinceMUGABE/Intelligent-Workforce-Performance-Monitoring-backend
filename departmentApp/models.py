@@ -36,10 +36,7 @@ class Department(models.Model):
             self.name = self.name.strip().title()
         super().save(*args, **kwargs)
     
-    def get_mentee_count(self):
-        """Get count of mentees in this department"""
-        return self.users.filter(role='mentee').count()
+    def get_employee_count(self):
+        """Get count of employees in this department"""
+        return self.users.filter(role='employee').count()
     
-    def get_mentor_count(self):
-        """Get count of mentors associated with this department"""
-        return self.mentors.count()

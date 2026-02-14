@@ -15,18 +15,17 @@ class DepartmentSerializer(serializers.ModelSerializer):
 class CustomUserSerializer(serializers.ModelSerializer):
     created_by_name = serializers.SerializerMethodField()
     department_details = serializers.SerializerMethodField()
-    departments_details = serializers.SerializerMethodField()
     
     class Meta:
         model = CustomUser
         fields = [
             'id', 'phone_number', 'email', 'work_mail_address',
-            'full_name', 'role', 'department', 'departments',
-            'department_details', 'departments_details',
+            'full_name', 'role', 'department',
+            'department_details',
             'status', 'availability_status', 'created_at', 
-            'created_by', 'created_by_name'
+            'created_by', 'created_by_name', 'day_off'
         ]
-        read_only_fields = ['work_mail_address', 'created_at', 'created_by']
+        read_only_fields = ['work_mail_address', 'created_at', 'created_by', 'updated_at']
     
     def get_created_by_name(self, obj):
         if obj.created_by:
@@ -34,8 +33,8 @@ class CustomUserSerializer(serializers.ModelSerializer):
         return None
     
     def get_department_details(self, obj):
-        """Get department details for mentees"""
-        if obj.role == 'mentee' and obj.department:
+        """Get department details for employees"""
+        if obj.role == 'employee' and obj.department:
             return {
                 'id': obj.department.id,
                 'name': obj.department.name,
@@ -43,19 +42,6 @@ class CustomUserSerializer(serializers.ModelSerializer):
             }
         return None
     
-    def get_departments_details(self, obj):
-        """Get departments details for mentors"""
-        if obj.role == 'mentor':
-            return [
-                {
-                    'id': dept.id,
-                    'name': dept.name,
-                    'status': dept.status
-                }
-                for dept in obj.departments.all()
-            ]
-        return []
-
 
 class UserCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating users with department validation"""
@@ -64,11 +50,6 @@ class UserCreateSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
-    departments = serializers.PrimaryKeyRelatedField(
-        many=True,
-        queryset=Department.objects.filter(status='active'),
-        required=False
-    )
     password = serializers.CharField(write_only=True, required=False)
     confirm_password = serializers.CharField(write_only=True, required=False)
     
@@ -76,31 +57,26 @@ class UserCreateSerializer(serializers.ModelSerializer):
         model = CustomUser
         fields = [
             'phone_number', 'email', 'full_name', 'role',
-            'department', 'departments', 'password', 'confirm_password'
+            'department', 'password', 'confirm_password'
         ]
     
     def validate(self, data):
-        role = data.get('role', 'mentee')
+        role = data.get('role', 'employee')
         department = data.get('department')
-        departments = data.get('departments', [])
+        
         
         # Validate department requirements based on role
-        if role == 'mentee':
+        if role == 'employee':
             if not department:
                 raise serializers.ValidationError({
-                    'department': 'Mentee users must have a department assigned.'
+                    'department': 'employee users must have a department assigned.'
                 })
         
-        elif role == 'mentor':
-            if not departments or len(departments) == 0:
-                raise serializers.ValidationError({
-                    'departments': 'Mentor users must have at least one department assigned.'
-                })
-        
-        elif role in ['admin', 'hr']:
-            # Clear departments for admin/hr
+
+        elif role in ['admin', 'manager', 'analyst']:
+            # Clear departments for admin
             data['department'] = None
-            data['departments'] = []
+           
         
         # Validate password matching if provided
         password = data.get('password')
@@ -124,31 +100,22 @@ class UserCreateSerializer(serializers.ModelSerializer):
             **validated_data
         )
         
-        # Set multiple departments for mentors
-        if user.role == 'mentor' and departments:
-            user.departments.set(departments)
-        
         return user
 
 
 class UserUpdateSerializer(serializers.ModelSerializer):
-    """Serializer for updating users (admin/HR only)"""
+    """Serializer for updating users (admin/Manager only)"""
     department = serializers.PrimaryKeyRelatedField(
         queryset=Department.objects.filter(status='active'),
         required=False,
         allow_null=True
-    )
-    departments = serializers.PrimaryKeyRelatedField(
-        many=True,
-        queryset=Department.objects.filter(status='active'),
-        required=False
     )
     
     class Meta:
         model = CustomUser
         fields = [
             'phone_number', 'email', 'full_name', 'role',
-            'department', 'departments', 'status', 'availability_status'
+            'department', 'status', 'availability_status'
         ]
         read_only_fields = ['work_mail_address']
     
@@ -156,58 +123,47 @@ class UserUpdateSerializer(serializers.ModelSerializer):
         instance = self.instance
         role = data.get('role', instance.role if instance else None)
         department = data.get('department')
-        departments = data.get('departments')
+        
         
         # Check if user can update departments
         request = self.context.get('request')
-        if request and ('department' in data or 'departments' in data):
+        if request and ('department' in data):
             if not request.user.can_update_departments():
                 raise serializers.ValidationError({
-                    'detail': 'Only admin and HR users can update departments.'
+                    'detail': 'Only admin and Manager users can update departments.'
                 })
         
         # Validate department requirements
-        if role == 'mentee':
+        if role == 'employee':
             if department is None and 'department' in data:
                 raise serializers.ValidationError({
-                    'department': 'Mentee users must have a department assigned.'
+                    'department': 'Employee users must have a department assigned.'
                 })
         
-        elif role == 'mentor':
-            if departments is not None and len(departments) == 0:
-                raise serializers.ValidationError({
-                    'departments': 'Mentor users must have at least one department assigned.'
-                })
         
-        elif role in ['admin', 'hr']:
+        elif role in ['admin', 'manager', 'analyst']:
             data['department'] = None
         
         return data
     
     def update(self, instance, validated_data):
-        departments = validated_data.pop('departments', None)
-        
+             
         # Update basic fields
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         
         instance.save()
-        
-        # Update departments for mentors
-        if instance.role == 'mentor' and departments is not None:
-            instance.departments.set(departments)
-            instance.department = None  # Clear FK
-        elif instance.role == 'mentee':
-            instance.departments.clear()  # Clear M2M
-        elif instance.role in ['admin', 'hr']:
-            instance.departments.clear()
+
+        if instance.role == 'employee':
+            instance.department.clear()  # Clear M2M
+        elif instance.role in ['admin', 'manager', 'analyst']:
             instance.department = None
         
         return instance
 
 
 class RegisterSerializer(serializers.Serializer):
-    """Serializer for self-registration (mentees only)"""
+    """Serializer for self-registration (employees only)"""
     phone_number = serializers.CharField(max_length=15, required=True)
     email = serializers.EmailField(required=True)
     full_name = serializers.CharField(max_length=100, required=True)
@@ -240,9 +196,9 @@ class UpdateProfileSerializer(serializers.ModelSerializer):
     
     def validate(self, data):
         # Prevent department changes in profile updates
-        if 'department' in data or 'departments' in data:
+        if 'department'  in data:
             raise serializers.ValidationError({
-                'detail': 'You cannot change your department(s). Please contact admin or HR.'
+                'detail': 'You cannot change your department. Please contact admin or Manager.'
             })
         return data
 
@@ -256,16 +212,11 @@ class ContactUsSerializer(serializers.Serializer):
 
 
 class UpdateDepartmentSerializer(serializers.Serializer):
-    """Serializer for updating user departments (admin/HR only)"""
+    """Serializer for updating user departments (admin/Manager only)"""
     department = serializers.PrimaryKeyRelatedField(
         queryset=Department.objects.filter(status='active'),
         required=False,
         allow_null=True
-    )
-    departments = serializers.PrimaryKeyRelatedField(
-        many=True,
-        queryset=Department.objects.filter(status='active'),
-        required=False
     )
     
     def validate(self, data):
@@ -274,17 +225,12 @@ class UpdateDepartmentSerializer(serializers.Serializer):
             raise serializers.ValidationError('User context is required.')
         
         department = data.get('department')
-        departments = data.get('departments', [])
         
-        if user.role == 'mentee':
+        
+        if user.role == 'employee':
             if not department and department is not None:
                 raise serializers.ValidationError({
-                    'department': 'Mentee users must have a department assigned.'
-                })
-        elif user.role == 'mentor':
-            if not departments:
-                raise serializers.ValidationError({
-                    'departments': 'Mentor users must have at least one department assigned.'
+                    'department': 'employee users must have a department assigned.'
                 })
         
         return data
@@ -341,3 +287,24 @@ class DepartmentSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(f"Status must be one of: {', '.join(valid_statuses)}")
         return value
 
+
+
+
+class UserDayOffSerializer(serializers.ModelSerializer):
+    """Serializer for updating user's day off"""
+    class Meta:
+        model = CustomUser
+        fields = ['day_off']
+    
+    def validate_day_off(self, value):
+        valid_days = ['monday', 'tuesday', 'wednesday', 'thursday', 
+                     'friday', 'saturday', 'sunday', 'none']
+        if value not in valid_days:
+            raise serializers.ValidationError(
+                f"Invalid day. Must be one of: {', '.join(valid_days)}"
+            )
+        return value
+    
+    
+    
+    

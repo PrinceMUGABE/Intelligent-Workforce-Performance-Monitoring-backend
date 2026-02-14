@@ -59,25 +59,15 @@ class CustomUserManager(BaseUserManager):
         # Department validation based on role
         from departmentApp.models import Department
         
-        if role == 'mentee':
-            # Mentees require a single department (ForeignKey)
+        if role == 'employee':
+            # Employees require a single department (ForeignKey)
             if not department:
-                raise ValueError("The department must be provided for mentee users")
+                raise ValueError("The department must be provided for employee users")
             
             if not Department.objects.filter(id=department, status='active').exists():
                 raise ValueError("Invalid or inactive department selected")
         
-        elif role == 'mentor':
-            # Mentors require departments list (ManyToMany)
-            if not departments or len(departments) == 0:
-                raise ValueError("At least one department must be provided for mentor users")
-            
-            # Validate all departments exist and are active
-            valid_depts = Department.objects.filter(id__in=departments, status='active')
-            if valid_depts.count() != len(departments):
-                raise ValueError("One or more selected departments are invalid or inactive")
-        
-        elif role in ['admin', 'hr']:
+        elif role in ['admin', 'manager', 'analyst']:
             # Admin and HR don't require departments
             department = None
             departments = None
@@ -86,7 +76,7 @@ class CustomUserManager(BaseUserManager):
             phone_number=phone_number,
             full_name=full_name,
             role=role,
-            department_id=department if role == 'mentee' else None,
+            department_id=department if role == 'employee' else None,
             status=status,
             availability_status=availability_status
         )
@@ -105,10 +95,7 @@ class CustomUserManager(BaseUserManager):
             
         user.set_password(password)
         user.save(using=self._db)
-        
-        # For mentors, set departments through M2M after saving
-        if role == 'mentor' and departments:
-            user.departments.set(departments)
+
         
         return user
 
@@ -130,7 +117,6 @@ class CustomUserManager(BaseUserManager):
             full_name=full_name,
             role='admin',
             department=None,
-            departments=None,
             status='approved',
             availability_status='active',
             work_mail_address=work_mail,
@@ -149,18 +135,18 @@ class CustomUserManager(BaseUserManager):
         
         role_prefixes = {
             'admin': 'admin',
-            'hr': 'hr',
-            'mentor': 'mentor',
-            'mentee': 'mentee'
+            'manager': 'manager',
+            'analyst': 'analyst',
+            'employee': 'employee'
         }
         role_prefix = role_prefixes.get(role, 'user')
         
         if len(names) >= 2:
             first_initial = names[0][0].lower()
             last_name = names[-1].lower().replace(' ', '')
-            base_mail = f"{first_initial}.{last_name}@{role_prefix}_btsl_mentorship.com"
+            base_mail = f"{first_initial}.{last_name}@{role_prefix}_codepulse_africa_ltd.com"
         else:
-            base_mail = f"{full_name.lower().replace(' ', '')}@{role_prefix}_btsl_mentorship.com"
+            base_mail = f"{full_name.lower().replace(' ', '')}@{role_prefix}_codepulse_africa_ltd.com"
         
         from userApp.models import CustomUser
         mail_exists = CustomUser.objects.filter(work_mail_address=base_mail).exists()
@@ -170,16 +156,16 @@ class CustomUserManager(BaseUserManager):
         
         random_num = random.randint(100, 999)
         if len(names) >= 2:
-            return f"{first_initial}.{last_name}{random_num}@{role_prefix}_btsl_mentorship.com"
+            return f"{first_initial}.{last_name}{random_num}@{role_prefix}_codepulse_africa_ltd.com"
         else:
-            return f"{full_name.lower().replace(' ', '')}{random_num}@{role_prefix}_btsl_mentorship.com"
+            return f"{full_name.lower().replace(' ', '')}{random_num}@{role_prefix}_codepulse_africa_ltd.com"
 
 class CustomUser(AbstractBaseUser, PermissionsMixin):
     ROLE_CHOICES = [
         ('admin', 'Admin'),
-        ('mentor', 'Mentor'),
-        ('mentee', 'Mentee'),
-        ('hr', 'HR'),
+        ('employee', 'Employee'),
+        ('manager', 'Manager'),
+        ('analyst', 'Analyst'),
     ]
     
     STATUS_CHOICES = [
@@ -191,6 +177,17 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     AVAILABILITY_CHOICES = [
         ('active', 'Active'),
         ('inactive', 'Inactive'),
+    ]
+    
+    DAY_CHOICES = [
+        ('monday', 'Monday'),
+        ('tuesday', 'Tuesday'),
+        ('wednesday', 'Wednesday'),
+        ('thursday', 'Thursday'),
+        ('friday', 'Friday'),
+        ('saturday', 'Saturday'),
+        ('sunday', 'Sunday'),
+        ('none', 'No Day Off'),
     ]
 
     phone_number = models.CharField(max_length=15, unique=True)
@@ -205,9 +202,9 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
     )
     
     full_name = models.CharField(max_length=100)
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='mentee')
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='employee')
     
-    # Single department for mentee users (ForeignKey)
+    # Single department for employee users (ForeignKey)
     department = models.ForeignKey(
         'departmentApp.Department',
         on_delete=models.SET_NULL,
@@ -216,20 +213,24 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         related_name='users'
     )
     
-    # Multiple departments for mentor users (ManyToManyField)
-    departments = models.ManyToManyField(
-        'departmentApp.Department',
-        blank=True,
-        related_name='mentors'
-    )
     
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     availability_status = models.CharField(max_length=20, choices=AVAILABILITY_CHOICES, default='inactive')
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
     created_at = models.DateTimeField(default=now)
+    updated_at = models.DateTimeField(default=now)
     created_by = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, related_name='created_users')
-
+    
+    day_off = models.CharField(
+        max_length=20, 
+        choices=DAY_CHOICES, 
+        default='none',
+        blank=True,
+        null=True,
+        help_text="User's preferred day off"
+    )
+    
     USERNAME_FIELD = 'phone_number'
     REQUIRED_FIELDS = ['email', 'full_name']
 
@@ -243,31 +244,31 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
         return self.role == 'admin'
     
     @property
-    def is_hr(self):
-        return self.role == 'hr'
+    def is_manager(self):
+        return self.role == 'manager'
     
     @property
-    def is_mentor(self):
-        return self.role == 'mentor'
+    def is_analyst(self):
+        return self.role == 'analyst'
     
     @property
-    def is_mentee(self):
-        return self.role == 'mentee'
+    def is_employee(self):
+        return self.role == 'employee'
     
     def can_update_departments(self):
         """Check if user can update other users' departments"""
-        return self.role in ['admin', 'hr']
+        return self.role in ['admin', 'manager']
     
     def clean(self):
         """Validate department requirements based on role"""
         super().clean()
         
-        # Mentees require a single department
-        if self.role == 'mentee' and not self.department:
-            raise ValidationError({'department': 'Mentee users must have a department assigned.'})
+        # employees require a single department
+        if self.role == 'employee' and not self.department:
+            raise ValidationError({'department': 'Employee users must have a department assigned.'})
         
         # Admin and HR don't require departments
-        if self.role in ['admin', 'hr']:
+        if self.role in ['admin', 'manager', 'analyst']:
             self.department = None
     
     def save(self, *args, **kwargs):
@@ -276,6 +277,3 @@ class CustomUser(AbstractBaseUser, PermissionsMixin):
             self.full_clean()
         super().save(*args, **kwargs)
         
-        # Post-save validation for mentors
-        if self.role == 'mentor' and self.departments.count() == 0:
-            pass  # Allow save, validation happens in views/forms

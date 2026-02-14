@@ -1,60 +1,35 @@
 # reportApp/urls.py
-
 from django.urls import path
 from . import views
 
 app_name = 'reportApp'
 
 urlpatterns = [
-    # ==================== ADMIN URLS ====================
-    path('admin/dashboard/', 
-         views.admin_dashboard_overview, 
-         name='admin_dashboard_overview'),
+    # Get available reports based on user role
+    path('available/', views.get_available_reports, name='available-reports'),
     
-    path('admin/users/analytics/', 
-         views.admin_user_analytics, 
-         name='admin_user_analytics'),
+    # User reports
+    path('users/', views.generate_user_report, name='user-report'),
     
-    path('admin/departments/', 
-         views.admin_department_report, 
-         name='admin_department_report'),
+    # Department reports
+    path('departments/', views.generate_department_report, name='department-report'),
     
-    # ==================== HR URLS ====================
-    path('hr/dashboard/', 
-         views.hr_dashboard_overview, 
-         name='hr_dashboard_overview'),
+    # Task reports
+    path('tasks/', views.generate_task_report, name='task-report'),
     
-    path('hr/onboarding/', 
-         views.hr_onboarding_report, 
-         name='hr_onboarding_report'),
+    # Task assignment reports
+    path('assignments/', views.generate_task_assignment_report, name='assignment-report'),
     
-    # ==================== MENTOR URLS ====================
-    path('mentor/dashboard/', 
-         views.mentor_dashboard_overview, 
-         name='mentor_dashboard_overview'),
+    # Day-off request reports
+    path('dayoff/', views.generate_dayoff_report, name='dayoff-report'),
     
-    path('mentor/mentees/progress/', 
-         views.mentor_mentee_progress, 
-         name='mentor_mentee_progress'),
+    # Activity reports
+    path('activities/', views.generate_activity_report, name='activity-report'),
     
-    # ==================== MENTEE URLS ====================
-    path('mentee/dashboard/', 
-         views.mentee_dashboard_overview, 
-         name='mentee_dashboard_overview'),
+    # Performance reports
+    path('performance/', views.generate_performance_report, name='performance-report'),
+    path('performance/<int:user_id>/', views.generate_performance_report, name='performance-report-user'),
     
-    path('mentee/onboarding/', 
-         views.mentee_onboarding_detail, 
-         name='mentee_onboarding_detail'),
-    
-    path('mentee/sessions/', 
-         views.mentee_session_history, 
-         name='mentee_session_history'),
-
-     path('generate/', 
-         views.generate_report, 
-         name='generate_report'),
-    
-    path('export/', 
-         views.export_report, 
-         name='export_report'),
+    # Organization reports
+    path('organization/', views.generate_organization_report, name='organization-report'),
 ]
